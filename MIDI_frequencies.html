@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MIDI notes/frequencies</title>
+  <style>
+    :root{
+      --even-row-bg: #dddddd;
+      --header-bg:  #c7d9c2;
+      --highlight-bg: #a8c39e;
+    }
+
+    html {
+      font-size: 20px;
+    }
+    body{
+      font-family: Helvetica, sans-serif;
+      font-size: 1rem;
+    }
+
+    .table-wrapper {
+      margin: 15px;
+      border: 2px solid black;
+      border-radius: 15px;
+      overflow: clip;
+      display: inline-block;
+    }
+
+    td,
+    th {
+      position: relative;
+      margin-left: auto;
+      margin-right: auto;
+      text-align: center;
+      padding: 5px 15px;
+      border: 2px solid black;
+    }
+
+    tr:nth-child(even){
+      background-color: var(--even-row-bg);
+    }
+
+    .tab{
+      border-collapse:collapse;
+      border: none;
+    }
+
+    .tab thead tr:first-child :is(td, th) {
+      border-top: none;
+    }
+
+    .tab tbody tr:last-child :is(td, th) {
+      border-bottom: none;
+    }
+
+    .tab tr :is(td, th):first-child {
+      border-left: none;
+    }
+
+    .tab tr :is(td, th):last-child {
+      border-right: none;
+    }
+
+    .row_header{
+      background:var(--header-bg);
+      z-index:2;
+    }
+
+    .col_header{
+      position:sticky;
+      top:0;
+      background:var(--header-bg);
+      z-index:2;
+    }
+
+    tr:hover, td:hover::before {
+      background-color: var(--highlight-bg);
+    }
+
+    td:hover,
+    th:hover {
+      background-color: var(--highlight-bg);
+    }
+
+    table:has(td:nth-child(1):hover) td:nth-child(1),
+    table:has(td:nth-child(2):hover) td:nth-child(2),
+    table:has(td:nth-child(3):hover) td:nth-child(3),
+    table:has(td:nth-child(4):hover) td:nth-child(4),
+    table:has(td:nth-child(5):hover) td:nth-child(5),
+    table:has(td:nth-child(6):hover) td:nth-child(6),
+    table:has(td:nth-child(7):hover) td:nth-child(7),
+    table:has(td:nth-child(8):hover) td:nth-child(8),
+    table:has(td:nth-child(9):hover) td:nth-child(9),
+    table:has(td:nth-child(10):hover) td:nth-child(10) {
+      background-color: var(--highlight-bg);
+    }
+    
+    .custom-tooltip {
+        top: 20px;
+        right: 20px;
+        width: 250px;
+
+        padding: 10px;
+        margin: 15px;
+        background: rgba(0, 0, 0, 0.85);
+        color: white;
+        border-radius: 6px;
+        font-size: 1rem;
+
+        visibility: hidden;
+    }
+
+    .row { display: flex; gap: 8px; }
+    .label { width: 120px; font-weight: bold; }
+    .value { white-space: pre-wrap; }
+
+  </style>
+
+  <script>
+    const REF_FREQUENCY = 440;
+    const REF_MIDI = 69;
+    const ROUND_DECIMALS = 4;
+    const START_CELL = 12;
+    const FIRST_MIDI_NOTE = 21;
+    const LAST_MIDI_NOTE = 108;
+    const NOTES = [
+      "C",
+      "C&sharp; = D&flat;",
+      "D",
+      "D&sharp; = E&flat;",
+      "E",
+      "F",
+      "F&sharp; = G&flat;",
+      "G",
+      "G&sharp; = A&flat;",
+      "A",
+      "A&sharp; = B&flat;",
+      "B",
+    ];
+    let midi_frequencies = {};
+    let master_array = {};
+    midi_frequencies[REF_MIDI] = REF_FREQUENCY;
+
+    document.addEventListener("DOMContentLoaded", () => {
+    const tooltip = document.getElementById("tooltip");
+    });
+
+
+    function loadData(){
+      midi_frequencies = getMidiFrequencies();
+      // console.log(midi_frequencies);
+      master_array = getMasterArray(midi_frequencies);
+      // console.log(master_array)
+      buildTable(master_array);
+    }
+
+    function semitoneUp(frequency, semitones=1) {
+      return (frequency * 2 ** (semitones/12)).toFixed(ROUND_DECIMALS)
+    }
+
+    function semitoneDown(frequency, semitones=1) {
+      return (frequency / (2 ** (semitones/12))).toFixed(ROUND_DECIMALS)
+    }
+    
+    function buildSequence(n, step, count) {
+      return Array.from({ length: count }, (_, i) => n + i * step);
+    }
+
+    function buildTable(data) {
+        const table = document.getElementById('midi_frequencies_table');
+
+        for (let i = 0; i < Object.keys(data).length; i++) {
+            const row = createRow(data[i]);
+            table.appendChild(row);
+        }
+    }
+
+    function createRow(row_data) {
+        const tr = document.createElement('tr');
+        const columns = createCol(row_data);
+
+        columns.forEach(td => tr.appendChild(td));
+        return tr;
+    }
+
+    function createCol(col_data) {
+        const columns = [];
+
+        const noteTh = document.createElement('th');
+        noteTh.innerHTML = col_data["note"];
+        noteTh.classList.add('col_header');
+        columns.push(noteTh);
+
+        for (let index = 0; index < Object.keys(col_data["columns"]).length; index++) {
+            const td = document.createElement('td');
+            const frequency_value = col_data["columns"][index]["frequency"] ?? "";
+            td.textContent = frequency_value;
+            if (col_data["columns"][index]["midi_note"] === 60 || col_data["columns"][index]["midi_note"] === 69) {
+                td.style.color = "crimson";
+                td.style.fontWeight = "bold";
+            }
+            td.addEventListener('mouseenter', (event) => handleMouseEnter(event, col_data["columns"][index], col_data["note"]));
+            td.addEventListener('mouseleave', handleMouseLeave);
+            columns.push(td);
+        }
+        return columns;
+    }
+
+    function handleMouseEnter(event, cellData, note) {
+        tooltip.innerHTML = `
+            <div class="row">
+                <div class="label">Note:</div>
+                <div class="value">${note ?? "N/A"}</div>
+            </div>
+            <div class="row">
+                <div class="label">Octave:</div>
+                <div class="value">${cellData.octave ?? "N/A"}</div>
+            </div>
+            <div class="row">
+                <div class="label">Frequency:</div>
+                <div class="value">${Number(cellData.frequency).toFixed(2) ?? "N/A"} Hz</div>
+            </div>
+            <div class="row">
+                <div class="label">MIDI Note:</div>
+                <div class="value">${cellData.midi_note ?? "N/A"}</div>
+            </div>
+            <div class="row">
+                <div class="label">Piano key:</div>
+                <div class="value">${cellData.key ?? "N/A"}</div>
+            </div>
+        `;
+        tooltip.style.visibility = 'visible';
+    }
+
+    function handleMouseLeave() {
+        tooltip.style.visibility = 'hidden';
+    }
+
+    function getMidiFrequencies(){
+        for (let index = 1; index < 49; index++) {
+            midi_frequencies[REF_MIDI-index] = semitoneDown(REF_FREQUENCY, index);
+        }
+
+        for (let index = 1; index < 40; index++) {
+            midi_frequencies[REF_MIDI+index] = semitoneUp(REF_FREQUENCY, index);  
+        }
+        return midi_frequencies
+    }
+
+    function getMasterArray(midi_frequencies){    
+        let n = START_CELL;
+        for (let row_i = 0; row_i < 12; row_i++) {
+            
+            let column_start_note = buildSequence(n, 12, 9);
+            let column_data = {};
+            for (let col_j = 0; col_j < column_start_note.length; col_j++) {
+              midi_note = column_start_note[col_j]
+              if (midi_note >= FIRST_MIDI_NOTE && midi_note <= LAST_MIDI_NOTE ) {
+                  column_data[col_j] = {
+                      "octave" : col_j,
+                      "midi_note" : midi_note,
+                      "frequency" : midi_frequencies[midi_note],
+                      "key" : column_start_note[col_j] - FIRST_MIDI_NOTE + 1
+                    };         
+              }
+              else{
+                column_data[col_j] = "";
+              }
+            }
+            master_array[row_i] = {
+              "note" : NOTES[row_i],
+              "columns" : column_data
+          }
+          n++;
+        }
+        return master_array
+    }
+
+  </script>
+</head>
+<body onload="loadData()">
+    <div class="table-wrapper">
+      <table class="tab">
+        <thead>
+          <tr>
+            <th class="col_header">NOTE</th>
+            <th class="row_header">0</th>
+            <th class="row_header">1</th>
+            <th class="row_header">2</th>
+            <th class="row_header">3</th>
+            <th class="row_header">4</th>
+            <th class="row_header">5</th>
+            <th class="row_header">6</th>
+            <th class="row_header">7</th>
+            <th class="row_header">8</th>
+          </tr>
+        </thead>
+        <tbody id="midi_frequencies_table"></tbody>
+      </table>
+    </div>
+
+    <div id="tooltip" class="custom-tooltip"></div>
+</body>
+</html>
